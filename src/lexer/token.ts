@@ -7,6 +7,7 @@ export type TokenType =
   | 'punctuator'
   | 'template'
   | 'regex'
+  | 'comment'
   | 'eof';
 
 export interface Token {

@@ -40,7 +40,11 @@ export class Lexer {
       case '-': this.addToken('operator', '-'); break;
       case '*': this.addToken('operator', '*'); break;
       case '/':
-        if (this.isRegexStart()) {
+        if (this.peek() === '/') {
+          this.singleLineComment()
+        } else if (this.peek() === '*') {
+          this.multiLineComment()
+        } else if (this.isRegexStart()) {
           this.regex()
         } else {
           this.addToken('operator', '/')
@@ -203,7 +207,7 @@ export class Lexer {
   }
 
   private template(): void {
-    const operatorsList = ['+', '-', '/', '*', '%'];
+    const operatorsList = ['+', '-', '%'];
     const punctuatorsList = ['(', ')', '{', '}', ':', ','];
     let value = '';
     const start = this.current - 1;
@@ -215,26 +219,34 @@ export class Lexer {
           value += this.peek();
           this.advance();
         } else {
-          // keep both the backlash and the character for other escape sequences
           value += '\\' + this.peek();
           this.advance();
         }
       } else if (this.peek() === '$' && this.peekNext() === '{') {
-        // Add the template part before the expression
         if (value.length >= 0) {
           this.addToken('template', value, start, this.current);
         }
         value = '';
   
-        // Handle the ${
         this.advance(); // $
         this.advance(); // {
         this.addToken('punctuator', '${', this.current - 2, this.current);
   
-        // Parse the expression
         let braceCount = 1;
         while (!this.isAtEnd() && braceCount > 0) {
-          if (this.peek() === '`') {
+          if (this.peek() === '/') {
+            const nextChar = this.peekNext();
+            if (nextChar === '/') {
+              this.singleLineComment();
+            } else if (nextChar === '*') {
+              this.multiLineComment();
+              // After a comment, we need to handle any following content
+              while (this.peek() === ' ') this.advance(); // Skip whitespace
+            } else {
+              this.addToken('operator', '/');
+              this.advance();
+            }
+          } else if (this.peek() === '`') {
             this.advance();
             this.template();
           } else if (this.peek() === '{') {
@@ -248,26 +260,28 @@ export class Lexer {
             }
             this.addToken('punctuator', '}', this.current, this.current + 1);
             this.advance();
+          } else if (this.isDigit(this.peek())) {
+            this.number();
           } else if (this.peek() === '"' || this.peek() === "'") {
             const quote = this.peek();
             this.advance();
             let stringValue = '';
             while (!this.isAtEnd() && this.peek() !== quote) {
-              stringValue += this.advance()
+              stringValue += this.advance();
             }
             if (this.peek() === quote) {
               this.advance();
-              this.addToken('string', stringValue, this.current - stringValue.length - 2, this.current)
+              this.addToken('string', stringValue, this.current - stringValue.length - 2, this.current);
             }
           } else if (this.isAlpha(this.peek())) {
             this.position = this.current;
             this.identifier();
           } else if (punctuatorsList.includes(this.peek())) {
             this.addToken('punctuator', this.peek(), this.current, this.current + 1);
-            this.advance()
+            this.advance();
           } else if (operatorsList.includes(this.peek())) {
-            this.addToken('operator', this.peek())
-            this.advance()
+            this.addToken('operator', this.peek());
+            this.advance();
           } else {
             this.advance();
           }
@@ -288,9 +302,8 @@ export class Lexer {
       throw new Error('Unterminated template literal');
     }
   
-    // Add any remaining template content
     if (value.length >= 0) {
-      this.addToken('template', value, this.position, this.current);
+      this.addToken('template', value, start, this.current);
     }
     this.advance(); // closing backtick
   }
@@ -338,4 +351,52 @@ export class Lexer {
     return /[gimsy]/.test(char);
   }
   
+  private singleLineComment(): void {
+    const start = this.current - 1; // include the first /
+    this.advance();
+
+    let value = '';
+    while (!this.isAtEnd() && this.peek() !== '\n') {
+      value += this.advance();
+    }
+
+    this.addToken('comment', value, start, this.current)
+  }
+
+  private multiLineComment(): void {
+    const start = this.current - 1; // include the first /
+    this.advance(); // consume the first *
+
+    let value = '';
+    let nesting = 1;
+
+    while (!this.isAtEnd() && nesting > 0) {
+      if (this.peek() === '*' && this.peekNext() === '/') {
+        nesting--;
+        if (nesting === 0) {
+          this.advance() // consume *
+          this.advance() // consume /
+          break;
+        }
+
+        value += this.advance() + this.advance();
+      } else if (this.peek() === '/' && this.peekNext() === '*') {
+        nesting++;
+        value += this.advance() + this.advance();
+      } else {
+        value += this.advance()
+      }
+    }
+
+    // Remove the leading * if present
+    if (value.startsWith('*')) {
+      value = value.slice(1);
+    }
+
+    if (this.isAtEnd() && nesting > 0) {
+      throw new Error('Unterminated multi-line comment');
+    }
+  
+    this.addToken('comment', value, start, this.current);
+  }
 }

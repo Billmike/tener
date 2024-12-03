@@ -92,8 +92,6 @@ describe('Lexer', () => {
     it('should tokenize single-character operators', () => {
       const input = '+ - *';
       const tokens = new Lexer(input).tokenize();
-
-      console.log('tokens', tokens)
       
       expect(tokens).toHaveLength(4); // Including EOF
       expect(tokens.map(t => t.value)).toEqual(['+', '-', '*', '']);
@@ -203,8 +201,6 @@ describe('Lexer', () => {
     it('should tokenize simple regex', () => {
       const input = '/ab+c/';
       const tokens = new Lexer(input).tokenize();
-
-      console.log('tokens', tokens)
       
       expect(tokens[0]).toEqual({
         type: 'regex',
@@ -413,6 +409,98 @@ describe('Lexer', () => {
         { type: 'template', value: '' },
         { type: 'eof', value: '' }
       ]);
+    });
+  });
+
+  describe('Comments', () => {
+    it('should handle single-line comments', () => {
+      const input = '// This is a comment\nlet x = 5;';
+      const tokens = new Lexer(input).tokenize();
+      
+      expect(tokens.map(t => ({ type: t.type, value: t.value }))).toEqual([
+        { type: 'comment', value: ' This is a comment' },
+        { type: 'keyword', value: 'let' },
+        { type: 'identifier', value: 'x' },
+        { type: 'operator', value: '=' },
+        { type: 'number', value: '5' },
+        { type: 'punctuator', value: ';' },
+        { type: 'eof', value: '' }
+      ]);
+    });
+  
+    it('should handle multi-line comments', () => {
+      const input = '/* This is a\nmulti-line\ncomment */\nlet x = 5;';
+      const tokens = new Lexer(input).tokenize();
+      
+      expect(tokens.map(t => ({ type: t.type, value: t.value }))).toEqual([
+        { type: 'comment', value: ' This is a\nmulti-line\ncomment ' },
+        { type: 'keyword', value: 'let' },
+        { type: 'identifier', value: 'x' },
+        { type: 'operator', value: '=' },
+        { type: 'number', value: '5' },
+        { type: 'punctuator', value: ';' },
+        { type: 'eof', value: '' }
+      ]);
+    });
+  
+    it('should handle nested multi-line comments', () => {
+      const input = '/* outer /* nested */ comment */';
+      const tokens = new Lexer(input).tokenize();
+      
+      expect(tokens.map(t => ({ type: t.type, value: t.value }))).toEqual([
+        { type: 'comment', value: ' outer /* nested */ comment ' },
+        { type: 'eof', value: '' }
+      ]);
+    });
+  
+    it('should handle comments in expressions', () => {
+      const input = 'let x = 5 /* comment */ + 3; // end comment';
+      const tokens = new Lexer(input).tokenize();
+      
+      expect(tokens.map(t => ({ type: t.type, value: t.value }))).toEqual([
+        { type: 'keyword', value: 'let' },
+        { type: 'identifier', value: 'x' },
+        { type: 'operator', value: '=' },
+        { type: 'number', value: '5' },
+        { type: 'comment', value: ' comment ' },
+        { type: 'operator', value: '+' },
+        { type: 'number', value: '3' },
+        { type: 'punctuator', value: ';' },
+        { type: 'comment', value: ' end comment' },
+        { type: 'eof', value: '' }
+      ]);
+    });
+  
+    it('should handle comments in template literals', () => {
+      const input = '`template ${/* comment */ 5} // not a comment`';
+      const tokens = new Lexer(input).tokenize();
+      
+      expect(tokens.map(t => ({ type: t.type, value: t.value }))).toEqual([
+        { type: 'template', value: 'template ' },
+        { type: 'punctuator', value: '${' },
+        { type: 'comment', value: ' comment ' },
+        { type: 'number', value: ' 5' },
+        { type: 'punctuator', value: '}' },
+        { type: 'template', value: ' // not a comment' },
+        { type: 'eof', value: '' }
+      ]);
+    });
+  
+    it('should handle comment-like content in strings', () => {
+      const input = '"// not a comment" + "/* also not a comment */"';
+      const tokens = new Lexer(input).tokenize();
+      
+      expect(tokens.map(t => ({ type: t.type, value: t.value }))).toEqual([
+        { type: 'string', value: '// not a comment' },
+        { type: 'operator', value: '+' },
+        { type: 'string', value: '/* also not a comment */' },
+        { type: 'eof', value: '' }
+      ]);
+    });
+  
+    it('should handle unterminated multi-line comment', () => {
+      const input = '/* unterminated';
+      expect(() => new Lexer(input).tokenize()).toThrow('Unterminated multi-line comment');
     });
   });
 });
