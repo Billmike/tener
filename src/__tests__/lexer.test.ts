@@ -503,4 +503,210 @@ describe('Lexer', () => {
       expect(() => new Lexer(input).tokenize()).toThrow('Unterminated multi-line comment');
     });
   });
+
+  describe('Comment Edge Cases', () => {
+    it.skip('should handle comments followed by line terminators', () => {
+      const input = '// comment\r\ncode';
+      const tokens = new Lexer(input).tokenize();
+      
+      expect(tokens.map(t => ({ type: t.type, value: t.value }))).toEqual([
+        { type: 'comment', value: ' comment' },
+        { type: 'identifier', value: 'code' },
+        { type: 'eof', value: '' }
+      ]);
+    });
+  
+    it('should handle empty single-line comments', () => {
+      const input = '//\ncode';
+      const tokens = new Lexer(input).tokenize();
+      
+      expect(tokens.map(t => ({ type: t.type, value: t.value }))).toEqual([
+        { type: 'comment', value: '' },
+        { type: 'identifier', value: 'code' },
+        { type: 'eof', value: '' }
+      ]);
+    });
+  
+    it('should handle empty multi-line comments', () => {
+      const input = '/**/code';
+      const tokens = new Lexer(input).tokenize();
+      
+      expect(tokens.map(t => ({ type: t.type, value: t.value }))).toEqual([
+        { type: 'comment', value: '' },
+        { type: 'identifier', value: 'code' },
+        { type: 'eof', value: '' }
+      ]);
+    });
+  
+    it('should handle deeply nested multi-line comments', () => {
+      const input = '/* l1 /* l2 /* l3 */ l2 */ l1 */';
+      const tokens = new Lexer(input).tokenize();
+      
+      expect(tokens.map(t => ({ type: t.type, value: t.value }))).toEqual([
+        { type: 'comment', value: ' l1 /* l2 /* l3 */ l2 */ l1 ' },
+        { type: 'eof', value: '' }
+      ]);
+    });
+  
+    it('should handle comments in regex literals', () => {
+      const input = '/pattern/ // comment\n/* comment */';
+      const tokens = new Lexer(input).tokenize();
+      
+      expect(tokens.map(t => ({ type: t.type, value: t.value }))).toEqual([
+        { type: 'regex', value: 'pattern' },
+        { type: 'comment', value: ' comment' },
+        { type: 'comment', value: ' comment ' },
+        { type: 'eof', value: '' }
+      ]);
+    });
+  
+    it('should handle comments in complex expressions', () => {
+      const input = 'x = /* c1 */ 5 /* c2 */ + /* c3 */ 3';
+      const tokens = new Lexer(input).tokenize();
+      
+      expect(tokens.map(t => ({ type: t.type, value: t.value }))).toEqual([
+        { type: 'identifier', value: 'x' },
+        { type: 'operator', value: '=' },
+        { type: 'comment', value: ' c1 ' },
+        { type: 'number', value: '5' },
+        { type: 'comment', value: ' c2 ' },
+        { type: 'operator', value: '+' },
+        { type: 'comment', value: ' c3 ' },
+        { type: 'number', value: '3' },
+        { type: 'eof', value: '' }
+      ]);
+    });
+  
+    it('should handle comments with unusual whitespace', () => {
+      const input = '/*\r\n\t\f\v*/';
+      const tokens = new Lexer(input).tokenize();
+      
+      expect(tokens.map(t => ({ type: t.type, value: t.value }))).toEqual([
+        { type: 'comment', value: '\r\n\t\f\v' },
+        { type: 'eof', value: '' }
+      ]);
+    });
+  
+    it('should handle multiple consecutive comments', () => {
+      const input = '// c1\n// c2\n/* c3 *//* c4 */';
+      const tokens = new Lexer(input).tokenize();
+      
+      expect(tokens.map(t => ({ type: t.type, value: t.value }))).toEqual([
+        { type: 'comment', value: ' c1' },
+        { type: 'comment', value: ' c2' },
+        { type: 'comment', value: ' c3 ' },
+        { type: 'comment', value: ' c4 ' },
+        { type: 'eof', value: '' }
+      ]);
+    });
+  
+    it('should handle comments with stars', () => {
+      const input = '/* ** * ** */';
+      const tokens = new Lexer(input).tokenize();
+      
+      expect(tokens.map(t => ({ type: t.type, value: t.value }))).toEqual([
+        { type: 'comment', value: ' ** * ** ' },
+        { type: 'eof', value: '' }
+      ]);
+    });
+  
+    it.skip('should handle multi-line comment with multiple closes', () => {
+      const input = '/* comment */ */ after';
+      const tokens = new Lexer(input).tokenize();
+      
+      expect(tokens.map(t => ({ type: t.type, value: t.value }))).toEqual([
+        { type: 'comment', value: ' comment ' },
+        { type: 'operator', value: '*' },
+        { type: 'operator', value: '/' },
+        { type: 'identifier', value: 'after' },
+        { type: 'eof', value: '' }
+      ]);
+    });
+  
+    it('should handle comment-like sequences in string literals', () => {
+      const input = '"http://example.com" + "/**/";';
+      const tokens = new Lexer(input).tokenize();
+      
+      expect(tokens.map(t => ({ type: t.type, value: t.value }))).toEqual([
+        { type: 'string', value: 'http://example.com' },
+        { type: 'operator', value: '+' },
+        { type: 'string', value: '/**/' },
+        { type: 'punctuator', value: ';' },
+        { type: 'eof', value: '' }
+      ]);
+    });
+  });
+
+  describe('JSX-like Syntax Edge Cases', () => {
+    it.skip('should handle division operators between JSX tags', () => {
+      const input = '<div>a / b</div>';
+      const tokens = new Lexer(input).tokenize();
+      
+      expect(tokens.map(t => ({ type: t.type, value: t.value }))).toEqual([
+        { type: 'operator', value: '<' },
+        { type: 'identifier', value: 'div' },
+        { type: 'operator', value: '>' },
+        { type: 'identifier', value: 'a' },
+        { type: 'operator', value: '/' },
+        { type: 'identifier', value: 'b' },
+        { type: 'operator', value: '<' },
+        { type: 'operator', value: '/' },
+        { type: 'identifier', value: 'div' },
+        { type: 'operator', value: '>' },
+        { type: 'eof', value: '' }
+      ]);
+    });
+  
+    it.skip('should handle mixed JSX and regular expressions', () => {
+      const input = '<div>{test.match(/regex/)} / <span>/not-regex/</span>';
+      const tokens = new Lexer(input).tokenize();
+      
+      expect(tokens.map(t => ({ type: t.type, value: t.value }))).toEqual([
+        { type: 'operator', value: '<' },
+        { type: 'identifier', value: 'div' },
+        { type: 'operator', value: '>' },
+        { type: 'punctuator', value: '{' },
+        { type: 'identifier', value: 'test' },
+        { type: 'punctuator', value: '.' },
+        { type: 'identifier', value: 'match' },
+        { type: 'punctuator', value: '(' },
+        { type: 'regex', value: 'regex' },
+        { type: 'punctuator', value: ')' },
+        { type: 'punctuator', value: '}' },
+        { type: 'operator', value: '/' },
+        { type: 'operator', value: '<' },
+        { type: 'identifier', value: 'span' },
+        { type: 'operator', value: '>' },
+        { type: 'operator', value: '/' },
+        { type: 'identifier', value: 'not-regex' },
+        { type: 'operator', value: '/' },
+        { type: 'operator', value: '<' },
+        { type: 'operator', value: '/' },
+        { type: 'identifier', value: 'span' },
+        { type: 'operator', value: '>' },
+        { type: 'eof', value: '' }
+      ]);
+    });
+  
+    it.skip('should handle comments and division in JSX content', () => {
+      const input = '<div>/* comment */ 10 / 2 /* comment */</div>';
+      const tokens = new Lexer(input).tokenize();
+      
+      expect(tokens.map(t => ({ type: t.type, value: t.value }))).toEqual([
+        { type: 'operator', value: '<' },
+        { type: 'identifier', value: 'div' },
+        { type: 'operator', value: '>' },
+        { type: 'comment', value: ' comment ' },
+        { type: 'number', value: '10' },
+        { type: 'operator', value: '/' },
+        { type: 'number', value: '2' },
+        { type: 'comment', value: ' comment ' },
+        { type: 'operator', value: '<' },
+        { type: 'operator', value: '/' },
+        { type: 'identifier', value: 'div' },
+        { type: 'operator', value: '>' },
+        { type: 'eof', value: '' }
+      ]);
+    });
+  });
 });
